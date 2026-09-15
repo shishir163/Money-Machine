@@ -89,6 +89,17 @@ h1,h2,h3{margin:0;font-weight:900;letter-spacing:-.02em;}
 .src-tag{display:inline-flex;align-items:center;gap:3px;background:var(--surface2);color:var(--muted);
   padding:1px 7px;border-radius:20px;font-size:10.5px;font-weight:800;}
 
+/* swipe-to-action rows */
+.swipe{position:relative;overflow:hidden;}
+.swipe>.acts{position:absolute;top:0;right:0;bottom:0;display:flex;}
+.swipe>.acts button{width:74px;color:#fff;font-size:11px;font-weight:800;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;}
+.swipe>.acts button .ic{font-size:17px;}
+.swipe>.acts .e{background:var(--brand);}
+.swipe>.acts .d{background:var(--neg);}
+.swipe>.fg{position:relative;background:var(--surface);transition:transform .2s cubic-bezier(.2,.8,.2,1);touch-action:pan-y;}
+.swipe:last-child .row-item{border-bottom:none;}
+.hint-swipe{font-size:11px;color:var(--muted);text-align:center;padding:2px 0 0;opacity:.75;}
+
 /* chips */
 .chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 6px;scrollbar-width:none;}
 .chips::-webkit-scrollbar{display:none;}
@@ -305,30 +316,59 @@ async function seedIfEmpty(){
   if(ACCOUNTS.length===0){
     await put('accounts',{id:uid(),name:'Hand Cash',type:'cash',icon:'👛',color:'#12b886',opening:0,active:true});
   }
-  if(CATS.length===0){
-    const E=[
-      ['Food','🍽️','#f0526b',['Groceries','Restaurant','Tea/Snacks']],
-      ['Transport','🚗','#4b3fbd',['Fuel','Ride share','Bus/Train']],
-      ['Bills','🧾','#f59f00',['Electricity','Internet','Mobile recharge','Gas']],
-      ['Shopping','🛍️','#e8622c',['Clothes','Electronics']],
-      ['Health','🩺','#0e8f9e',['Medicine','Doctor']],
-      ['Family','👨‍👩‍👧','#d6336c',[]],
-      ['Education','📚','#7048e8',[]],
-      ['Entertainment','🎬','#2f8f4e',[]],
-      ['Rent','🏠','#495057',[]],
-      ['Others','📦','#868e96',[]],
-    ];
-    const I=[
-      ['Salary','💼','#12b886',[]],
-      ['Business','🏪','#0e8f9e',[]],
-      ['Interest','🏦','#7048e8',[]],
-      ['Gift','🎁','#f06595',[]],
-      ['Others','➕','#868e96',[]],
-    ];
-    for(const [n,ic,cl,subs] of E){const pid=uid();await put('categories',{id:pid,name:n,icon:ic,color:cl,kind:'expense',parentId:null,budget:0});
-      for(const s of subs)await put('categories',{id:uid(),name:s,icon:ic,color:cl,kind:'expense',parentId:pid,budget:0});}
+  if(!CATS.some(c=>c.kind==='income'&&!c.parentId)){
+    const I=[['Salary','💼','#12b886'],['Business','🏪','#0e8f9e'],['Interest','🏦','#7048e8'],['Rent income','🏠','#0ca678'],['Gift','🎁','#f06595'],['Others','➕','#868e96']];
     for(const [n,ic,cl] of I)await put('categories',{id:uid(),name:n,icon:ic,color:cl,kind:'income',parentId:null,budget:0});
   }
+}
+
+/* Shisir's personal expense category pack — installed once, then editable in-app */
+const CATPACK_VERSION='shisir1';
+const CATPACK=[
+  {name:"Car",icon:"🚗",color:"#4b3fbd",subs:[["Accessories & parts","🔧"],["Car maintenance","🛠️"],["Car wash","🧽"],["Fuel","⛽"],["Parking & Toll","🅿️"],["Tax","🧾"]]},
+  {name:"Driver",icon:"🧑‍✈️",color:"#495057",subs:[["Salary","💵"],["Bonus","🎉"],["Advance","💸"],["Food","🍱"],["Tips","🪙"]]},
+  {name:"Family",icon:"👨‍👩‍👧",color:"#d6336c",subs:[["Father","👨"],["Mother","👩"],["Bindu's Family","👪"],["Gift","🎁"],["Food","🍽️"],["Eid Purpose","🌙"]]},
+  {name:"Food",icon:"🍽️",color:"#f0526b",subs:[["Outside","🍴"],["Takeaway","🥡"]]},
+  {name:"Gift",icon:"🎁",color:"#f06595",subs:[["Birthday","🎂"],["Donation","🤲"],["Eid Gift","🌙"],["Jakat","🕌"],["Sarna's Friend","👥"],["Sister/Nephew","👧"],["Sosur Bari","🏠"],["Umaiza's Friend","🧒"],["Wedding","💍"]]},
+  {name:"Shisir (own)",icon:"🧔",color:"#0e8f9e",subs:[["Clothing","👕"],["Electronics gadget","💻"],["Food","🍔"],["Food EHD","🥡"],["Medical","🩺"],["Medication","💊"],["Study purpose","📚"],["Mobile","📲"]]},
+  {name:"Umaiza",icon:"🧒",color:"#7048e8",subs:[["Food","🍎"],["Medical purpose","🩺"],["Medication","💊"],["Shopping","🛍️"],["Study","📚"],["Toys","🧸"]]},
+  {name:"Wife",icon:"👩",color:"#e64980",subs:[["Cash","💵"],["Shopping","🛍️"],["Medical","🩺"],["Medication","💊"],["Mobile","📲"]]},
+  {name:"Utilities",icon:"💡",color:"#f59f00",subs:[["Electricity","⚡"],["Gas","🔥"],["Household work","🧹"],["Internet","🌐"],["Maid","🧺"],["Mobile","📲"]]},
+  {name:"Travelling",icon:"✈️",color:"#22b8cf",subs:[["Flights","🛫"],["Hotel","🏨"],["Sosur bari","🏠"],["Tours & activities","🎡"],["Transport","🚕"]]},
+  {name:"Transport",icon:"🚕",color:"#7950f2",subs:[["Uber","🚗"],["Pathao","🏍️"],["Rickshaw","🛺"]]},
+  {name:"Groceries",icon:"🛒",color:"#2f8f4e",subs:[["Fish","🐟"],["Grocery","🛒"],["Household supplies","🧴"],["Meat","🍖"],["Vegetables","🥦"],["Fruits","🍎"]]},
+];
+async function ensureCatPack(){
+  if(SETTINGS.catPack===CATPACK_VERSION)return;
+  for(const top of CATPACK){
+    let t=CATS.find(c=>!c.parentId&&c.kind==='expense'&&c.name.toLowerCase()===top.name.toLowerCase());
+    if(!t){t={id:uid(),name:top.name,icon:top.icon,color:top.color,kind:'expense',parentId:null,budget:0};await put('categories',t);CATS.push(t);}
+    for(const [sn,si] of top.subs){
+      if(!CATS.some(c=>c.parentId===t.id&&c.name.toLowerCase()===sn.toLowerCase())){
+        const s={id:uid(),name:sn,icon:si,color:top.color,kind:'expense',parentId:t.id,budget:0};await put('categories',s);CATS.push(s);
+      }
+    }
+  }
+  SETTINGS.catPack=CATPACK_VERSION;await saveSettings();
+}
+
+/* Shisir's cards + loan — installed once as accounts (edit each to set due & limit) */
+const ACCTPACK_VERSION='shisir1';
+const ACCTPACK=[
+  {name:"City Amex",type:"card",icon:"💳",color:"#4b3fbd"},
+  {name:"EBL Platinum",type:"card",icon:"💳",color:"#0e8f9e"},
+  {name:"SCBL Gold",type:"card",icon:"💳",color:"#f59f00"},
+  {name:"EBL Loan",type:"loan",icon:"🏛️",color:"#495057"},
+];
+async function ensureAcctPack(){
+  if(SETTINGS.acctPack===ACCTPACK_VERSION)return;
+  for(const a of ACCTPACK){
+    if(!ACCOUNTS.some(x=>x.name.toLowerCase()===a.name.toLowerCase())){
+      const o={id:uid(),name:a.name,type:a.type,icon:a.icon,color:a.color,opening:0,creditLimit:0,linkedBankId:null,monthlyAmount:0,maturityDate:'',active:true};
+      await put('accounts',o);ACCOUNTS.push(o);
+    }
+  }
+  SETTINGS.acctPack=ACCTPACK_VERSION;await saveSettings();
 }
 async function loadAll(){
   ACCOUNTS=await all('accounts'); CATS=await all('categories'); TXNS=await all('txns');
@@ -467,29 +507,72 @@ function renderDash(){
   html+=`<div class="sectitle">Recent <a onclick="go('txn')">See all ›</a></div><div class="card">`;
   const recent=TXNS.slice(0,6);
   if(recent.length===0)html+=`<div class="empty"><span class="em">📝</span>Tap + to add your first record</div>`;
-  else recent.forEach(t=>html+=txnRow(t));
+  else recent.forEach(t=>html+=txnRow(t,true));
   html+=`</div><div style="height:20px"></div>`;
 
   document.getElementById('v-dash').innerHTML=html;
 }
 
 /* shared transaction row */
-function txnRow(t){
-  const a=acct(t.accountId);
+function txnRow(t,sw){
+  const a=acct(t.accountId); let inner;
   if(t.type==='transfer'){const to=acct(t.toAccountId);
-    return `<div class="row-item" onclick="txnDetail('${t.id}')">
+    inner=`<div class="row-item" onclick="txnDetail('${t.id}')">
       <div class="avatar" style="background:var(--muted)">🔁</div>
       <div class="mid"><div class="t">Transfer</div>
         <div class="s">${niceDate(t.ts)} · ${esc(a?.name||'?')} → ${esc(to?.name||'?')}${t.note?' · '+esc(t.note):''}</div></div>
       <div class="amt num">${fmt(t.amount)}</div></div>`;
+  } else {
+    const c=catFull(t.categoryId); const sign=t.type==='income'?'+':'−';
+    inner=`<div class="row-item" onclick="txnDetail('${t.id}')">
+      <div class="avatar" style="background:${c?.color||'var(--muted)'}">${c?.icon||'📦'}</div>
+      <div class="mid"><div class="t">${esc(c?.name||'—')}</div>
+        <div class="s">${niceDate(t.ts)}${t.note?' · '+esc(t.note):''} <span class="src-tag">${ACCT_TYPES[a?.type]?.icon||'💰'} ${esc(a?.name||'?')}</span></div></div>
+      <div class="amt num ${t.type==='income'?'pos':'neg'}">${sign}${fmt(t.amount)}</div></div>`;
   }
-  const c=catFull(t.categoryId); const sign=t.type==='income'?'+':'−';
-  return `<div class="row-item" onclick="txnDetail('${t.id}')">
-    <div class="avatar" style="background:${c?.color||'var(--muted)'}">${c?.icon||'📦'}</div>
-    <div class="mid"><div class="t">${esc(c?.name||'—')}</div>
-      <div class="s">${niceDate(t.ts)}${t.note?' · '+esc(t.note):''} <span class="src-tag">${ACCT_TYPES[a?.type]?.icon||'💰'} ${esc(a?.name||'?')}</span></div></div>
-    <div class="amt num ${t.type==='income'?'pos':'neg'}">${sign}${fmt(t.amount)}</div></div>`;
+  return sw? swipeRow(inner,'txn',t.id): inner;
 }
+
+/* ===== swipe-to-action engine (record / category / subcategory) ===== */
+function swipeRow(inner,type,id,parent){
+  return `<div class="swipe" data-t="${type}" data-i="${id}"${parent?` data-p="${parent}"`:''}>
+    <div class="acts">
+      <button class="e" onclick="swAct(this,'edit')"><span class="ic">✏️</span>Edit</button>
+      <button class="d" onclick="swAct(this,'del')"><span class="ic">🗑</span>Delete</button>
+    </div><div class="fg">${inner}</div></div>`;
+}
+function swAct(btn,kind){
+  const sw=btn.closest('.swipe'); const t=sw.dataset.t,i=sw.dataset.i,p=sw.dataset.p;
+  swClose();
+  if(kind==='edit'){ if(t==='txn')openTxn(i); else editCat(i); return; }
+  if(t==='txn'){ if(confirm('Delete this record?'))deleteTxn(i); }
+  else if(t==='cat'){ delCat(i); }
+  else if(t==='sub'){ if(confirm('Delete this subcategory? Existing records keep their data.'))delSub(i,p); }
+}
+const SWW=148;
+let SW={fg:null,x0:0,y0:0,base:0,mode:null,tx:0,id:null};
+function swClose(except){document.querySelectorAll('.swipe').forEach(s=>{const fg=s.querySelector('.fg');if(fg&&fg!==except){fg.style.transform='';s.dataset.open='';}});}
+document.addEventListener('pointerdown',e=>{
+  const fg=e.target.closest&&e.target.closest('.swipe>.fg');
+  if(!fg){swClose();return;}
+  SW.fg=fg;SW.x0=e.clientX;SW.y0=e.clientY;SW.base=fg.parentElement.dataset.open==='1'?-SWW:0;SW.mode=null;SW.tx=SW.base;SW.id=e.pointerId;
+});
+document.addEventListener('pointermove',e=>{
+  if(!SW.fg||e.pointerId!==SW.id)return;
+  const dx=e.clientX-SW.x0,dy=e.clientY-SW.y0;
+  if(SW.mode===null){ if(Math.abs(dx)>8&&Math.abs(dx)>Math.abs(dy)){SW.mode='h';swClose(SW.fg);} else if(Math.abs(dy)>8){SW.mode='v';} }
+  if(SW.mode==='h'){ SW.tx=Math.max(-SWW,Math.min(0,SW.base+dx)); SW.fg.style.transition='none'; SW.fg.style.transform=`translateX(${SW.tx}px)`; if(e.cancelable)e.preventDefault(); }
+},{passive:false});
+function swEnd(){ if(!SW.fg)return; const fg=SW.fg; fg.style.transition='';
+  if(SW.mode==='h'){ const open=SW.tx<-SWW/2; fg.style.transform=open?`translateX(${-SWW}px)`:''; fg.parentElement.dataset.open=open?'1':''; }
+  SW.fg=null;SW.mode=null;SW.id=null; }
+document.addEventListener('pointerup',swEnd);
+document.addEventListener('pointercancel',swEnd);
+// tapping anywhere while a row is open closes it and swallows that tap
+document.addEventListener('click',e=>{
+  const openSw=document.querySelector('.swipe[data-open="1"]');
+  if(openSw && !e.target.closest('.acts')){ e.preventDefault(); e.stopPropagation(); swClose(); }
+},true);
 /* =========================================================
    VIEW: Records (transactions)
    ========================================================= */
@@ -514,6 +597,7 @@ function renderTxns(){
   html+=`<div class="chips" style="margin-top:12px">
     ${['all','expense','income','transfer'].map(f=>`<button class="chip ${TXN_FILTER===f?'on':''}" onclick="setFilter('${f}')">${f==='all'?'All':f[0].toUpperCase()+f.slice(1)}</button>`).join('')}
   </div>`;
+  if(list.length)html+=`<div class="hint-swipe">← swipe any record to edit or delete</div>`;
 
   if(list.length===0){html+=`<div class="card"><div class="empty"><span class="em">🗓️</span>Nothing recorded for ${label}</div></div>`;}
   else{
@@ -523,7 +607,7 @@ function renderTxns(){
       const dt=new Date(k); const dExp=sumExpense(days[k]), dInc=sumIncome(days[k]);
       html+=`<div class="sectitle"><span>${niceDate(dt.getTime())}, ${dt.toLocaleDateString('en-GB',{weekday:'short'})}</span>
         <span class="num muted">${dInc?'+'+fmt(dInc)+'  ':''}${dExp?'−'+fmt(dExp):''}</span></div><div class="card">`;
-      days[k].forEach(t=>html+=txnRow(t));
+      days[k].forEach(t=>html+=txnRow(t,true));
       html+=`</div>`;
     });
   }
@@ -923,7 +1007,7 @@ function acctDetail(id){
 
   let html=head+`<div class="sectitle"><span>History</span><a onclick="openAccount('${id}')">Edit account</a></div><div class="card">`;
   if(mine.length===0)html+=`<div class="empty" style="padding:20px">No transactions yet</div>`;
-  else mine.forEach(t=>html+=txnRow(t));
+  else mine.forEach(t=>html+=txnRow(t,true));
   html+=`</div><div style="height:14px"></div><button class="btn ghost" onclick="go('acct')">‹ Back to accounts</button><div style="height:24px"></div>`;
 
   document.getElementById('v-acct').innerHTML=html; window.scrollTo(0,0);
@@ -1012,8 +1096,10 @@ function editCat(id){
     <label class="f">Colour</label><div class="colgrid" id="ecCols"></div>`;
   if(!c.parentId){
     html+=`<div class="divider"></div><div class="sectitle" style="margin:0 2px 8px"><span>Subcategories</span></div>`;
-    subs.forEach(s=>html+=`<div class="row-item"><div class="avatar" style="width:32px;height:32px;font-size:15px;background:${s.color||c.color}">${s.icon||c.icon}</div><div class="mid"><div class="t">${esc(s.name)}</div></div><button class="iconbtn" style="background:var(--surface2);color:var(--neg)" onclick="delSub('${s.id}','${id}')">🗑</button></div>`);
-    html+=`<div style="display:flex;gap:8px;margin-top:8px"><input class="field" id="newSub" placeholder="Add subcategory"><button class="btn sm" onclick="addSub('${id}')">Add</button></div>`;
+    subs.forEach(s=>{const inner=`<div class="row-item" onclick="editCat('${s.id}')"><div class="avatar" style="width:32px;height:32px;font-size:15px;background:${s.color||c.color}">${s.icon||c.icon}</div><div class="mid"><div class="t">${esc(s.name)}</div></div><div class="mini">edit ›</div></div>`;
+      html+=swipeRow(inner,'sub',s.id,id);});
+    if(subs.length)html+=`<div class="hint-swipe">← swipe a row to edit or delete</div>`;
+    html+=`<div style="display:flex;gap:8px;margin-top:10px"><input class="field" id="newSub" placeholder="Add subcategory"><button class="btn sm" onclick="addSub('${id}')">Add</button></div>`;
   }
   html+=`<button class="btn" onclick="saveCat('${id}')">Save</button>
     <button class="btn danger" style="margin-top:10px" onclick="delCat('${id}')">Delete category</button>`;
@@ -1030,9 +1116,10 @@ async function delCat(id){const subs=CATS.filter(x=>x.parentId===id);
 
 function manageCategories(){
   const mk=kind=>CATS.filter(c=>c.kind===kind&&!c.parentId).map(c=>{const subs=CATS.filter(x=>x.parentId===c.id);
-    return `<div class="row-item" onclick="editCat('${c.id}')"><div class="avatar" style="width:36px;height:36px;font-size:17px;background:${c.color}">${c.icon}</div>
+    const inner=`<div class="row-item" onclick="editCat('${c.id}')"><div class="avatar" style="width:36px;height:36px;font-size:17px;background:${c.color}">${c.icon}</div>
     <div class="mid"><div class="t">${esc(c.name)}</div>${subs.length?`<div class="s">${subs.map(s=>esc(s.name)).join(', ')}</div>`:''}</div>
-    ${c.budget?`<span class="pill num" style="background:var(--surface2);color:var(--muted)">${fmt(c.budget)}</span>`:''}<div class="mini">›</div></div>`;}).join('');
+    ${c.budget?`<span class="pill num" style="background:var(--surface2);color:var(--muted)">${fmt(c.budget)}</span>`:''}<div class="mini">›</div></div>`;
+    return swipeRow(inner,'cat',c.id);}).join('');
   openSheet(`<h2>Categories <span class="x" onclick="closeSheet()">✕</span></h2>
     <div class="seg"><button class="on" id="mcE" onclick="mcTab('expense')">Expense</button><button id="mcI" onclick="mcTab('income')">Income</button></div>
     <div class="card" id="mcList">${mk('expense')}</div>
@@ -1141,7 +1228,7 @@ function printReport(){
    Init + service worker
    ========================================================= */
 async function init(){
-  await openDB(); await loadAll(); await seedIfEmpty(); await loadAll();
+  await openDB(); await loadAll(); await seedIfEmpty(); await ensureCatPack(); await ensureAcctPack(); await loadAll();
   applyTheme(); renderDash();
   if('serviceWorker' in navigator){try{await navigator.serviceWorker.register('sw.js');}catch(e){}}
 }
