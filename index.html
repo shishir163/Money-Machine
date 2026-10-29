@@ -188,6 +188,22 @@ mark{background:#ffe066;color:#1c1b33;border-radius:4px;padding:0 2px;}
 .tsw .g{display:block;height:36px;border-radius:10px;}
 .tsw.on{border-color:var(--brand);}
 
+/* app lock */
+#lock{position:fixed;inset:0;z-index:100;background:var(--hero);color:#fff;display:flex;align-items:center;justify-content:center;padding:24px 20px calc(24px + var(--safe-b));}
+.lk-in{width:100%;max-width:340px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px;}
+.lk-in svg{width:76px;height:76px;margin-bottom:4px;}
+.lk-t{font-size:25px;font-weight:900;}
+.lk-s{opacity:.92;font-size:15px;}
+.lk-in input{width:100%;font-size:30px;text-align:center;letter-spacing:.45em;padding:14px;border-radius:16px;border:2px solid rgba(255,255,255,.35);background:rgba(255,255,255,.16);color:#fff;outline:none;font-family:inherit;font-weight:900;}
+.lk-in input::placeholder{color:rgba(255,255,255,.7);letter-spacing:normal;font-size:15px;}
+.lk-msg{min-height:20px;font-size:14px;}
+.lk-btn{width:100%;padding:15px;border-radius:15px;background:#fff;color:#2b2550;font-size:16px;font-weight:900;}
+.lk-forgot{font-size:13.5px;opacity:.85;text-decoration:underline;margin-top:4px;cursor:pointer;}
+.shake{animation:shake .4s;}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-10px)}40%{transform:translateX(10px)}60%{transform:translateX(-7px)}80%{transform:translateX(7px)}}
+body.locked{overflow:hidden;}
+body.locked .view,body.locked .nav,body.locked .fab,body.locked .scrim{visibility:hidden;}
+
 /* chips */
 .chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 6px;scrollbar-width:none;}
 .chips::-webkit-scrollbar{display:none;}
@@ -1327,6 +1343,8 @@ function openSettings(){
     <button class="btn ghost" onclick="manageCategories()">🏷️ Manage categories & subcategories</button>
     <button class="btn ghost" style="margin-top:10px" onclick="editOverallBudget()">🎯 Monthly budget</button>
     <div class="divider"></div>
+    ${lockSettingsHtml()}
+    <div class="divider"></div>
     <label class="f">Backup — keep your data safe on Google Drive</label>
     <button class="btn ghost" onclick="openExcelExport()">📊 Excel — export &amp; share</button>
     <button class="btn ghost" style="margin-top:10px" onclick="exportData()">⬇️ Export data (.json)</button>
@@ -1340,7 +1358,7 @@ function setTheme(t){const th=themeById(t);if(th.dark){SETTINGS.nightTheme=t;if(
 function setFont(f){SETTINGS.font=f;saveSettings();applyTheme();openSettings();}
 
 function exportData(){
-  const data={app:'MoneyMachine',v:2,exportedAt:new Date().toISOString(),accounts:ACCOUNTS,categories:CATS,txns:TXNS,lheads:LHEADS,ledger:LEDGER,settings:SETTINGS};
+  const data={app:'MoneyMachine',v:2,exportedAt:new Date().toISOString(),accounts:ACCOUNTS,categories:CATS,txns:TXNS,lheads:LHEADS,ledger:LEDGER,settings:Object.fromEntries(Object.entries(SETTINGS).filter(([k])=>!PIN_KEYS.includes(k)))};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
   a.download='money-machine-backup-'+todayISO()+'.json';a.click();
@@ -1359,7 +1377,9 @@ function importData(ev){
       for(const t of d.txns)await put('txns',t);
       for(const h of (d.lheads||[]))await put('lheads',h);
       for(const e of (d.ledger||[]))await put('ledger',e);
-      await put('meta',{id:'settings',...(d.settings||{}),ledgerSeed:d.lheads?1:0});
+      const keepLock=Object.fromEntries(PIN_KEYS.filter(k=>SETTINGS[k]!==undefined).map(k=>[k,SETTINGS[k]]));
+      const inSet=Object.fromEntries(Object.entries(d.settings||{}).filter(([k])=>!PIN_KEYS.includes(k)));
+      await put('meta',{id:'settings',...inSet,...keepLock,ledgerSeed:d.lheads?1:0});
       await loadAll();await ensureLedgerSeed();await loadAll();applyTheme();closeSheet();toast('Backup restored');go('dash');
     }catch(e){toast('Could not read file');}
   };
@@ -1763,6 +1783,106 @@ function calcUse(){
   const F=CALC.target==='led'?LF:TF; F.amount=String(v); F.calcOpen=false; CALC.expr='';
   CALC.target==='led'?drawLed():drawTxnSheet(TF.id||null);
 }
+/* =========================================================
+   APP LOCK — 4–6 letters or numbers (not case-sensitive)
+   ========================================================= */
+const PIN_KEYS=['pinHash','pinSalt','pinLen','pinNumeric','pinHint','lockAfter'];
+let LOCK={tries:0,until:0,hiddenAt:0}, PF={};
+async function pinHash(pin,salt){
+  const s=salt+':'+String(pin).toLowerCase();
+  try{if(window.crypto&&crypto.subtle){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join('');}}catch(e){}
+  let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return 'f'+(h>>>0).toString(16);
+}
+const pinOk=p=>/^[a-zA-Z0-9]{4,6}$/.test(p);
+const LOGO_SVG='<svg viewBox="0 0 48 48" fill="none"><rect width="48" height="48" rx="13" fill="rgba(255,255,255,.18)"/><path d="M14 33V15h4l6 9 6-9h4v18h-4V22l-6 8-6-8v11z" fill="#fff"/><circle cx="24" cy="24" r="21" stroke="#fff" stroke-opacity=".35" stroke-width="1.5"/></svg>';
+function showLock(){
+  if(!SETTINGS.pinHash)return;
+  closeSheet();
+  let el=document.getElementById('lock'); if(!el){el=document.createElement('div');el.id='lock';document.body.appendChild(el);}
+  document.body.classList.add('locked');
+  el.innerHTML=`<div class="lk-in">${LOGO_SVG}<div class="lk-t">Money Machine</div><div class="lk-s">Enter your PIN</div>
+    <input id="lkIn" type="password" ${SETTINGS.pinNumeric?'inputmode="numeric" pattern="[0-9]*"':''} autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="6"
+      oninput="lockInput(this)" onkeydown="if(event.key==='Enter')lockTry()" aria-label="PIN">
+    <div class="lk-msg" id="lkMsg">${SETTINGS.pinHint?'Hint: '+esc(SETTINGS.pinHint):''}</div>
+    <button class="lk-btn" onclick="lockTry()">Unlock</button>
+    <a class="lk-forgot" onclick="forgotPin()">Forgot PIN?</a></div>`;
+  setTimeout(()=>{const i=document.getElementById('lkIn');if(i)i.focus();},300);
+}
+function unlock(){const el=document.getElementById('lock');if(el)el.remove();document.body.classList.remove('locked');refresh();}
+function lockInput(i){i.value=i.value.replace(/[^a-zA-Z0-9]/g,'');if(SETTINGS.pinLen&&i.value.length===SETTINGS.pinLen)lockTry();}
+async function lockTry(){
+  const i=document.getElementById('lkIn'),m=document.getElementById('lkMsg'); if(!i)return;
+  if(Date.now()<LOCK.until){m.textContent=`Too many tries — wait ${Math.ceil((LOCK.until-Date.now())/1000)} seconds.`;i.value='';return;}
+  if(!i.value)return;
+  if(await pinHash(i.value,SETTINGS.pinSalt)===SETTINGS.pinHash){LOCK.tries=0;unlock();return;}
+  LOCK.tries++; i.value='';
+  const box=document.querySelector('.lk-in'); box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake');
+  if(LOCK.tries>=5){LOCK.until=Date.now()+30000;LOCK.tries=0;m.textContent='Too many wrong tries — wait 30 seconds.';}
+  else m.textContent='Wrong PIN'+(SETTINGS.pinHint?' · Hint: '+SETTINGS.pinHint:'');
+}
+function forgotPin(){
+  const el=document.getElementById('lock'); if(!el)return;
+  el.innerHTML=`<div class="lk-in">${LOGO_SVG}<div class="lk-t">Forgot PIN</div>
+    <div class="lk-s" style="line-height:1.5">The PIN can't be recovered — your data lives only on this phone and no one else has the PIN.<br><br>
+    The only way in is to <b>erase everything on this phone</b>, then restore your last backup (.json) from Settings.</div>
+    <input id="erIn" type="text" autocapitalize="characters" autocomplete="off" placeholder="Type ERASE to confirm" style="letter-spacing:.1em;font-size:18px">
+    <button class="lk-btn" style="background:#fff;color:#e03131" onclick="eraseAll()">Erase all data</button>
+    <a class="lk-forgot" onclick="showLock()">‹ Back — I remember it</a></div>`;
+}
+async function eraseAll(){
+  if((document.getElementById('erIn').value||'').trim().toUpperCase()!=='ERASE'){toast('Type ERASE to confirm');return;}
+  try{db.close();}catch(e){}
+  await new Promise(r=>{const q=indexedDB.deleteDatabase(DB_NAME);q.onsuccess=q.onerror=q.onblocked=()=>r();});
+  location.reload();
+}
+/* set / change / remove */
+function pinFlow(mode){PF={mode,step:mode==='set'?'new':'current',err:''};drawPin();}
+function drawPin(){
+  const t={set:'Set a PIN',change:'Change PIN',remove:'Remove PIN'}[PF.mode];
+  const inp=(id,ph,ac)=>`<input class="field num" id="${id}" type="password" maxlength="6" autocomplete="${ac}" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="${ph}" style="font-size:20px;letter-spacing:.3em;text-align:center">`;
+  let h=`<h2>${t} <span class="x" onclick="openSettings()">✕</span></h2>`;
+  if(PF.step==='current') h+=`<label class="f">Current PIN</label>${inp('pfCur','••••','off')}<button class="btn" onclick="pinNext()">Next</button>`;
+  else h+=`<div class="mini" style="margin-bottom:4px">4 to 6 letters or numbers — e.g. <b>2580</b> or <b>tk2026</b>. Capital/small letters don't matter.</div>
+    <label class="f">New PIN</label>${inp('pfNew','4–6 characters','new-password')}
+    <label class="f">Type it again</label>${inp('pfNew2','again','new-password')}
+    <label class="f">Hint <span class="mini">— optional, shown on the lock screen</span></label>
+    <input class="field" id="pfHint" maxlength="40" placeholder="e.g. car number" value="${esc(SETTINGS.pinHint||'')}">
+    <div class="mini" style="margin-top:10px">⚠️ If you forget the PIN, the only way back in is to erase and restore from a backup. Export a backup first.</div>
+    <button class="btn" onclick="pinSave()">Save PIN</button>`;
+  if(PF.err)h+=`<div class="mini" style="color:var(--neg);text-align:center;margin-top:10px">${esc(PF.err)}</div>`;
+  openSheet(h); setTimeout(()=>{const i=document.getElementById(PF.step==='current'?'pfCur':'pfNew');if(i)i.focus();},250);
+}
+async function pinNext(){
+  const v=document.getElementById('pfCur').value;
+  if(await pinHash(v,SETTINGS.pinSalt)!==SETTINGS.pinHash){PF.err='Wrong PIN';drawPin();return;}
+  if(PF.mode==='remove'){PIN_KEYS.forEach(k=>delete SETTINGS[k]);await saveSettings();toast('PIN removed');openSettings();return;}
+  PF.step='new';PF.err='';drawPin();
+}
+async function pinSave(){
+  const a=document.getElementById('pfNew').value,b=document.getElementById('pfNew2').value,hint=document.getElementById('pfHint').value.trim();
+  if(!pinOk(a)){PF.err='PIN must be 4–6 letters or numbers (no spaces or symbols)';drawPin();return;}
+  if(a.toLowerCase()!==b.toLowerCase()){PF.err="The two PINs don't match";drawPin();return;}
+  const salt=uid()+uid();
+  Object.assign(SETTINGS,{pinSalt:salt,pinHash:await pinHash(a,salt),pinLen:a.length,pinNumeric:/^\d+$/.test(a),pinHint:hint,lockAfter:SETTINGS.lockAfter??30});
+  await saveSettings(); toast(PF.mode==='change'?'PIN changed':'PIN set — app is locked from now on'); openSettings();
+}
+function setLockAfter(v){SETTINGS.lockAfter=v;saveSettings();openSettings();}
+function lockSettingsHtml(){
+  if(!SETTINGS.pinHash)return `<label class="f">App lock</label><button class="btn ghost" style="margin-top:0" onclick="pinFlow('set')">🔒 Set a PIN</button>`;
+  const la=SETTINGS.lockAfter??30;
+  return `<label class="f">App lock — 🔒 on</label>
+    <div class="mini">Asks for the PIN when you open the app, and when you come back after:</div>
+    <div class="chips" style="margin-top:6px">${[[0,'Right away'],[30,'30 sec'],[60,'1 min'],[300,'5 min']].map(([v,l])=>`<button class="chip ${la===v?'on':''}" onclick="setLockAfter(${v})">${l}</button>`).join('')}</div>
+    <div class="two"><button class="btn ghost" style="margin-top:8px" onclick="pinFlow('change')">Change PIN</button><button class="btn ghost" style="margin-top:8px" onclick="pinFlow('remove')">Remove PIN</button></div>
+    <button class="btn ghost" style="margin-top:10px" onclick="closeSheet();showLock()">🔒 Lock now</button>`;
+}
+function awayCheck(){ if(SETTINGS.pinHash&&LOCK.hiddenAt&&!document.getElementById('lock')&&Date.now()-LOCK.hiddenAt>=(SETTINGS.lockAfter??30)*1000)showLock(); LOCK.hiddenAt=0; }
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){LOCK.hiddenAt=Date.now(); if(SETTINGS.pinHash&&(SETTINGS.lockAfter??30)===0)showLock();}
+  else awayCheck();
+});
+window.addEventListener('pagehide',()=>{LOCK.hiddenAt=LOCK.hiddenAt||Date.now();});
+window.addEventListener('pageshow',e=>{if(e.persisted)awayCheck();});
 document.addEventListener('keydown',e=>{
   if(!document.getElementById('calcBox'))return;
   const ae=document.activeElement; if(ae&&(ae.tagName==='TEXTAREA'||(ae.tagName==='INPUT'&&ae.type!=='number')))return;
@@ -1951,7 +2071,7 @@ function themeGrid(dark){
    ========================================================= */
 async function init(){
   await openDB(); await loadAll(); await seedIfEmpty(); await ensureCatPack(); await ensureAcctPack(); await loadAll(); await ensureLedgerSeed(); await loadAll();
-  applyTheme(); renderDash();
+  applyTheme(); if(SETTINGS.pinHash)showLock(); renderDash();
   if('serviceWorker' in navigator){try{await navigator.serviceWorker.register('sw.js');}catch(e){}}
 }
 init();
