@@ -204,6 +204,39 @@ mark{background:#ffe066;color:#1c1b33;border-radius:4px;padding:0 2px;}
 body.locked{overflow:hidden;}
 body.locked .view,body.locked .nav,body.locked .fab,body.locked .scrim{visibility:hidden;}
 
+/* trend card */
+.tcard{padding:14px 14px 12px;}
+.tc-tabs{margin-bottom:12px;}
+.tc-tabs button{padding:8px 4px;font-size:12.5px;}
+.tc-head{margin:0 2px 6px;}
+.tc-big{font-size:28px;font-weight:900;line-height:1.15;margin-top:2px;}
+.tc-delta{font-size:12.5px;margin-top:3px;min-height:18px;}
+.tc-delta .up{color:var(--neg);font-weight:900;} .tc-delta .down{color:var(--pos);font-weight:900;} .tc-delta .flat{color:var(--muted);font-weight:900;}
+.tc-foot{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:6px;padding-top:9px;border-top:1px solid var(--line);}
+.tc-foot b{color:var(--ink);}
+/* account spend box (add record) */
+.aspend{margin-top:8px;border-radius:14px;padding:11px 12px 10px;background:var(--surface2);border-left:4px solid var(--ac);}
+.as-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12.5px;color:var(--muted);}
+.as-top b{font-size:17px;color:var(--ink);}
+.as-bars{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;align-items:end;margin:8px 0 6px;height:66px;}
+.as-bars div{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:3px;height:100%;}
+.as-bars i{display:block;width:62%;border-radius:5px 5px 2px 2px;background:var(--ac);opacity:.35;}
+.as-bars .on i{opacity:1;}
+.as-bars em{font-style:normal;font-size:9.5px;color:var(--muted);font-weight:800;}
+.as-bars .on em{color:var(--ink);}
+.as-bars span{font-size:10px;color:var(--muted);font-weight:800;}
+.as-bars .on span{color:var(--ink);}
+.as-foot{display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;font-size:12px;color:var(--muted);}
+.as-foot b{color:var(--ink);}
+.as-note{font-size:11.5px;color:var(--warn);margin-top:6px;}
+/* month table (account detail) */
+.amt-tbl{width:100%;border-collapse:collapse;font-size:13.5px;}
+.amt-tbl th{font-size:11.5px;color:var(--muted);text-align:right;padding:10px 0 6px;font-weight:800;}
+.amt-tbl td{text-align:right;padding:8px 0;border-top:1px solid var(--line);}
+.amt-tbl th:first-child,.amt-tbl td:first-child{text-align:left;}
+.amt-tbl tr.cur td{font-weight:900;color:var(--brand);}
+.amt-tbl tfoot td{font-weight:900;border-top:2px solid var(--line);}
+
 /* chips */
 .chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 6px;scrollbar-width:none;}
 .chips::-webkit-scrollbar{display:none;}
@@ -560,6 +593,74 @@ function topCategories(list,limit=5){
   list.filter(t=>t.type==='expense').forEach(t=>{const c=catFull(t.categoryId);const k=c?c.topId:'?';m[k]=(m[k]||0)+t.amount;});
   return Object.entries(m).map(([id,v])=>({id,v,c:catFull(id)||{name:'Deleted category',icon:'❔',color:'#868e96'}})).sort((a,b)=>b.v-a.v).slice(0,limit);
 }
+/* ===== Professional trend chart: gridlines, Tk axis, gradient bars, average line, tap a bar ===== */
+function niceStep(max){if(max<=0)return 250;const raw=max/4,p=Math.pow(10,Math.floor(Math.log10(raw))),f=raw/p;return (f<=1?1:f<=2?2:f<=2.5?2.5:f<=5?5:10)*p;}
+function svgTrend(data,{h=190,hi=-1,avg=true,avgVal=null,pick=null,color=null}={}){
+  const W=340,L=36,Rr=6,T=26,B=24,ch=h-T-B,cw=W-L-Rr,n=data.length;
+  const max=Math.max(0,...data.map(d=>d.value)),step=niceStep(max),top=step*4;
+  const slot=cw/n,bw=Math.max(3,Math.min(26,slot*.6)),gid='tg'+Math.random().toString(36).slice(2,8);
+  const c1=color||'var(--brand2)',c2=color||'var(--brand)';
+  let g=`<defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:${c1}"/><stop offset="1" style="stop-color:${c2}"/></linearGradient></defs>`;
+  for(let i=0;i<=4;i++){const y=T+ch-ch*i/4;
+    g+=`<line x1="${L}" x2="${W-Rr}" y1="${y}" y2="${y}" stroke="var(--line)" stroke-width="1"${i?' stroke-dasharray="2 4"':''}/>`+
+       `<text x="${L-7}" y="${y+3.5}" text-anchor="end" font-size="9.5" font-weight="700" fill="var(--muted)">${i?kfmt(step*i):'0'}</text>`;}
+  let bubble='';
+  data.forEach((d,i)=>{
+    const cx=L+slot*i+slot/2,x=cx-bw/2,bh=top?d.value/top*ch:0,y=T+ch-bh,on=i===hi;
+    if(d.value>0)g+=`<rect x="${x}" y="${y}" width="${bw}" height="${Math.max(bh,2)}" rx="${Math.min(6,bw/2)}" fill="url(#${gid})" opacity="${hi<0||on?1:.35}"/>`;
+    else g+=`<rect x="${x}" y="${T+ch-2}" width="${bw}" height="2" rx="1" fill="var(--line)"/>`;
+    if(d.label)g+=`<text x="${cx}" y="${h-7}" text-anchor="middle" font-size="9.5" font-weight="${on?900:700}" fill="${on?'var(--ink)':'var(--muted)'}">${esc(d.label)}</text>`;
+    if(pick)g+=`<rect x="${L+slot*i}" y="${T}" width="${slot}" height="${ch+B}" fill="transparent" style="cursor:pointer" onclick="${pick}(${i})"/>`;
+    if(on&&d.value>0){const t=fmt(d.value),tw=t.length*6.1+14,bx=Math.min(Math.max(cx-tw/2,L),W-Rr-tw),by=Math.max(2,y-24);
+      bubble=`<rect x="${bx}" y="${by}" width="${tw}" height="19" rx="9.5" fill="var(--ink)"/><text x="${bx+tw/2}" y="${by+13}" text-anchor="middle" font-size="10.5" font-weight="900" fill="var(--surface)">${t}</text>`;}
+  });
+  if(avg){let a=avgVal;if(a===null){const v=data.map(d=>d.value).filter(x=>x>0);a=v.length>1?v.reduce((p,q)=>p+q,0)/v.length:0;}
+    if(a>0){const y=T+ch-a/top*ch,lab='avg '+kfmt(a),lw=lab.length*5.6+10;
+      g+=`<line x1="${L}" x2="${W-Rr}" y1="${y}" y2="${y}" stroke="var(--warn)" stroke-width="1.5" stroke-dasharray="6 4"/>`;
+      bubble=`<rect x="${L+2}" y="${y-8}" width="${lw}" height="16" rx="8" fill="var(--surface)" stroke="var(--warn)" stroke-width="1"/><text x="${L+2+lw/2}" y="${y+3.5}" text-anchor="middle" font-size="9.5" font-weight="900" fill="var(--warn)">${lab}</text>`+bubble;}}
+  return `<svg viewBox="0 0 ${W} ${h}" width="100%" style="display:block;overflow:visible">${g}${bubble}</svg>`;
+}
+let TREND_MODE=(()=>{try{return localStorage.getItem('mm_trend')||'6m';}catch(e){return '6m';}})(), TREND_PICK=null;
+function setTrend(m){TREND_MODE=m;TREND_PICK=null;try{localStorage.setItem('mm_trend',m);}catch(e){}renderDash();}
+function trendPick(i){TREND_PICK=TREND_PICK===i?null:i;renderDash();}
+function trendInfo(){
+  const n=new Date(),Y=n.getFullYear(),M=n.getMonth(),D=n.getDate(),E=f=>sumExpense(TXNS.filter(f));
+  const dayE=d=>E(t=>new Date(t.ts).toDateString()===d.toDateString());
+  const monE=(y,m,upto)=>E(t=>{const d=new Date(t.ts);return d.getFullYear()===y&&d.getMonth()===m&&(!upto||d.getDate()<=upto);});
+  if(TREND_MODE==='week'){const ws=startOfWeek(n),cur=(n.getDay()+6)%7,dn=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    const data=dn.map((l,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return {label:l,full:d.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'short'}),value:dayE(d)};});
+    let prev=0;for(let i=0;i<=cur;i++){const d=new Date(ws);d.setDate(ws.getDate()-7+i);prev+=dayE(d);}
+    const total=data.slice(0,cur+1).reduce((s,d)=>s+d.value,0);
+    return {data,cur,title:'This week',total,prev,cmp:'vs last week',avg:total/(cur+1),avgTxt:'Avg per day '+fmt(total/(cur+1))};}
+  if(TREND_MODE==='month'){const dim=new Date(Y,M+1,0).getDate(),data=[];
+    for(let d=1;d<=dim;d++){const dt=new Date(Y,M,d);data.push({label:(d===1||d%5===0)?String(d):'',full:d+' '+MONTHS[M],value:dayE(dt)});}
+    const total=monE(Y,M),pm=new Date(Y,M-1,1),prev=monE(pm.getFullYear(),pm.getMonth(),D);
+    return {data,cur:D-1,title:MONTHS[M]+' '+Y+' · day by day',total,prev,cmp:'vs same days last month',avg:total/D,avgTxt:'Avg per day '+fmt(total/D)};}
+  if(TREND_MODE==='year'){const data=MONTHS.map((l,i)=>({label:l.slice(0,3),full:l+' '+Y,value:monE(Y,i)}));
+    const total=data.slice(0,M+1).reduce((s,d)=>s+d.value,0);let prev=0;for(let i=0;i<M;i++)prev+=monE(Y-1,i);prev+=monE(Y-1,M,D);
+    return {data,cur:M,title:'This year · '+Y,total,prev,cmp:'vs same time last year',avg:total/(M+1),avgTxt:'Avg per month '+fmt(total/(M+1))};}
+  const data=[];for(let i=5;i>=0;i--){const d=new Date(Y,M-i,1);data.push({label:MONTHS[d.getMonth()],full:MONTHS[d.getMonth()]+' '+d.getFullYear(),value:monE(d.getFullYear(),d.getMonth())});}
+  const pm=new Date(Y,M-1,1),done=data.slice(0,5).filter(d=>d.value>0),av=done.length?done.reduce((s,d)=>s+d.value,0)/done.length:0;
+  return {data,cur:5,title:'This month',total:data[5].value,prev:monE(pm.getFullYear(),pm.getMonth(),D),cmp:'vs same days last month',
+    avg:av,avgTxt:'Past months avg '+fmt(av)+' / month'};
+}
+function trendCard(){
+  const I=trendInfo(),pk=TREND_PICK!==null&&I.data[TREND_PICK]?TREND_PICK:null;
+  const hi=pk!==null?pk:I.cur;
+  let head;
+  if(pk!==null)head=`<div class="mini">${esc(I.data[pk].full)}</div><div class="tc-big num">${fmt(I.data[pk].value)}</div><div class="tc-delta">Tap the bar again to go back</div>`;
+  else{let d='<span class="mini">No spending to compare yet</span>';
+    if(I.prev>0){const pc=Math.round((I.total-I.prev)/I.prev*100);d=pc===0?`<span class="flat">● Same ${I.cmp}</span>`:pc>0?`<span class="up">▲ ${pc}% more</span> <span class="mini">${I.cmp}</span>`:`<span class="down">▼ ${-pc}% less</span> <span class="mini">${I.cmp}</span>`;}
+    else if(I.total>0)d=`<span class="mini">${I.cmp}: nothing spent then</span>`;
+    head=`<div class="mini">Spent · ${esc(I.title)}</div><div class="tc-big num">${fmt(I.total)}</div><div class="tc-delta">${d}</div>`;}
+  const mxI=I.data.reduce((b,d,i)=>d.value>I.data[b].value?i:b,0),mx=I.data[mxI];
+  return `<div class="card tcard">
+    <div class="seg tc-tabs">${[['week','Week'],['month','Month'],['6m','6 months'],['year','Year']].map(([k,l])=>`<button class="${TREND_MODE===k?'on':''}" onclick="setTrend('${k}')">${l}</button>`).join('')}</div>
+    <div class="tc-head">${head}</div>
+    ${svgTrend(I.data,{hi,pick:'trendPick',avgVal:I.avg||0})}
+    <div class="tc-foot"><span>${I.avgTxt}</span>${mx.value>0?`<span>Highest: ${esc(mx.full)} · <b class="num">${fmt(mx.value)}</b></span>`:''}</div>
+  </div>`;
+}
 function renderDash(){
   const now=new Date();
   const mtx=monthTxns(now);
@@ -568,17 +669,6 @@ function renderDash(){
   const wStart=startOfWeek(now);
   const week=TXNS.filter(t=>t.ts>=wStart.getTime());
   const tops=topCategories(mtx,5);
-
-  // monthly trend (last 6 months expense)
-  const trend=[];
-  for(let i=5;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);
-    const e=sumExpense(TXNS.filter(t=>inMonth(t.ts,d)));
-    trend.push({label:MONTHS[d.getMonth()],value:e,short:e>=1000?Math.round(e/1000)+'k':e});}
-  // this week daily
-  const wk=[];const dn=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-  for(let i=0;i<7;i++){const d=new Date(wStart);d.setDate(wStart.getDate()+i);
-    const e=sumExpense(TXNS.filter(t=>new Date(t.ts).toDateString()===d.toDateString()));
-    wk.push({label:dn[i],value:e});}
 
   let html=`
   <button class="searchbar" onclick="openSearch()"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>Search notes, categories, amount…</button>
@@ -596,11 +686,7 @@ function renderDash(){
     <div class="stat"><div class="k">This week</div><div class="v num">${fmt(sumExpense(week))}</div></div>
   </div>`;
 
-  html+=`<div class="sectitle">Monthly expense trend</div>
-    <div class="card">${svgBar(trend,{accent:'var(--brand)'})}</div>`;
-
-  html+=`<div class="sectitle">This week, day by day</div>
-    <div class="card">${svgLine(wk,{color:'var(--brand2)'})}</div>`;
+  html+=`<div class="sectitle">Spending trend</div>`+trendCard();
 
   html+=`<div class="sectitle">Top spending — ${MONTHS[now.getMonth()]}</div><div class="card">`;
   if(tops.length===0)html+=`<div class="empty"><span class="em">🍃</span>No expense yet this month</div>`;
@@ -756,6 +842,7 @@ function renderAccounts(){
           <div class="ab num">Due ${fmt(due)}</div>
           ${limit?`<div class="bar" style="margin-top:8px;background:rgba(255,255,255,.25)"><span style="width:${used}%;background:#fff"></span></div>
             <div class="atype num">Limit ${fmt(limit)} · ${used}% used · Available ${fmt(Math.max(0,limit-due))}</div>`:`<div class="atype">Credit card</div>`}
+          <div class="atype num" style="opacity:.95">This month spent ${fmt(acctMonthSum(a.id,new Date()))} · Last month ${fmt(acctMonthSum(a.id,new Date(new Date().getFullYear(),new Date().getMonth()-1,1)))}</div>
         </div><div style="height:12px"></div>`;
       } else {
         const isDebt=b<0;
@@ -909,12 +996,12 @@ function renderReports(){
     const md=[];for(let i=0;i<12;i++){const d=new Date(REP_REF.getFullYear(),i,1);
       md.push({label:MONTHS[i].slice(0,1),value:sumExpense(TXNS.filter(t=>inMonth(t.ts,d))),
         short:''});}
-    html+=`<div class="sectitle">Monthly expense — ${REP_REF.getFullYear()}</div><div class="card">${svgBar(md,{accent:'var(--brand)'})}</div>`;
+    html+=`<div class="sectitle">Monthly expense — ${REP_REF.getFullYear()}</div><div class="card">${svgTrend(md.map((d,i)=>({...d,label:MONTHS[i]})),{hi:REP_REF.getFullYear()===new Date().getFullYear()?new Date().getMonth():-1})}</div>`;
   } else {
     // last 6 months compare in month mode
     const md=[];for(let i=5;i>=0;i--){const d=new Date(REP_REF.getFullYear(),REP_REF.getMonth()-i,1);
       md.push({label:MONTHS[d.getMonth()],value:sumExpense(TXNS.filter(t=>inMonth(t.ts,d)))});}
-    html+=`<div class="sectitle">Expense — last 6 months</div><div class="card">${svgBar(md,{accent:'var(--brand)'})}</div>`;
+    html+=`<div class="sectitle">Expense — last 6 months</div><div class="card">${svgTrend(md,{hi:5})}</div>`;
   }
 
   // Income vs Expense donut/compare
@@ -1006,7 +1093,7 @@ function drawTxnSheet(editing){
         ${ACCT_TYPES[a.type].icon} ${esc(a.name)} <span style="opacity:.7">${due?'due '+fmt(Math.max(0,-b)):fmt(b)}</span></button>`;
     }).join('')}
   </div>
-  ${TF.accountId&&ACCT_TYPES[acct(TF.accountId)?.type]?.grp==='credit'&&isExp?`<div class="mini" style="margin:6px 2px;color:var(--warn)">💳 Adds to this card's due</div>`:''}
+  ${TF.accountId?acctSpendBox(TF.accountId,TF.kind):''}
 
   <div class="two" style="margin-top:4px">
     <div><label class="f">Date</label><input class="field" type="date" value="${TF.dateISO}" onchange="TF.dateISO=this.value"></div>
@@ -1123,6 +1210,36 @@ async function deleteAccount(id){
 /* =========================================================
    Account detail  (+ card pay bill, savings maturity, loan repay)
    ========================================================= */
+/* how much went out of (or came into) one account in a month */
+function acctMonthSum(id,ref,kind='expense'){return TXNS.filter(t=>t.type===kind&&t.accountId===id&&inMonth(t.ts,ref)).reduce((s,t)=>s+t.amount,0);}
+function acctSpendBox(id,kind){
+  const a=acct(id); if(!a)return '';
+  const n=new Date(),grp=ACCT_TYPES[a.type].grp,isExp=kind==='expense',b=balanceOf(id);
+  const months=[];for(let i=5;i>=0;i--){const d=new Date(n.getFullYear(),n.getMonth()-i,1);months.push({l:MONTHS[d.getMonth()],v:acctMonthSum(id,d,kind)});}
+  const cur=months[5].v,prev=months[4].v,mx=Math.max(1,...months.map(m=>m.v));
+  let extra=grp==='credit'?`Due ${fmt(Math.max(0,-b))}${a.creditLimit?` · Limit left ${fmt(Math.max(0,a.creditLimit+b))}`:''}`:grp==='spend'?`Balance ${fmt(b)}`:'';
+  return `<div class="aspend" style="--ac:${a.color}">
+    <div class="as-top"><span>${a.icon||ACCT_TYPES[a.type].icon} ${esc(a.name)} · ${isExp?'spent':'received'} this month</span><b class="num">${fmt(cur)}</b></div>
+    <div class="as-bars">${months.map((m,i)=>`<div class="${i===5?'on':''}"><em class="num">${m.v?kfmt(m.v):'–'}</em><i style="height:${Math.max(3,m.v/mx*34)}px"></i><span>${m.l}</span></div>`).join('')}</div>
+    <div class="as-foot"><span>Last month <b class="num">${fmt(prev)}</b></span>${extra?`<span>${extra}</span>`:''}</div>
+    ${grp==='credit'&&isExp?`<div class="as-note">💳 This expense adds to the card's due</div>`:''}
+  </div>`;
+}
+function acctMonthTable(id){
+  const a=acct(id),grp=ACCT_TYPES[a.type].grp,n=new Date(),rows=[];
+  for(let i=0;i<12;i++){const d=new Date(n.getFullYear(),n.getMonth()-i,1);
+    const out=acctMonthSum(id,d,'expense'),inc=acctMonthSum(id,d,'income'),paid=TXNS.filter(t=>t.type==='transfer'&&t.toAccountId===id&&inMonth(t.ts,d)).reduce((s,t)=>s+t.amount,0);
+    rows.push({d,out,inc,paid});}
+  const chart=rows.slice(0,6).reverse().map(r=>({label:MONTHS[r.d.getMonth()],value:r.out}));
+  let h=`<div class="sectitle">${grp==='credit'?'Spent on this card — month by month':'Spent from this account — month by month'}</div>
+    <div class="card">${svgTrend(chart,{hi:5,h:170,color:a.color})}</div>
+    <div class="card" style="padding:4px 14px;margin-top:10px"><table class="amt-tbl num"><thead><tr><th>Month</th><th>Spent</th><th>${grp==='credit'?'Paid':'Received'}</th></tr></thead><tbody>`;
+  rows.forEach((r,i)=>h+=`<tr class="${i===0?'cur':''}"><td>${MONTHS[r.d.getMonth()]} ${r.d.getFullYear()}</td><td>${r.out?fmt(r.out):'–'}</td><td>${(grp==='credit'?r.paid:r.inc)?fmt(grp==='credit'?r.paid:r.inc):'–'}</td></tr>`);
+  const tOut=rows.reduce((s,r)=>s+r.out,0);
+  h+=`</tbody><tfoot><tr><td>12 months</td><td>${fmt(tOut)}</td><td>${fmt(rows.reduce((s,r)=>s+(grp==='credit'?r.paid:r.inc),0))}</td></tr></tfoot></table>
+    <div class="mini" style="padding:2px 0 10px">Monthly average spent: <b class="num">${fmt(tOut/12)}</b></div></div>`;
+  return h;
+}
 function acctDetail(id){
   const a=acct(id); if(!a)return;
   const b=balanceOf(id); const grp=ACCT_TYPES[a.type].grp;
@@ -1167,7 +1284,7 @@ function acctDetail(id){
       <div class="stat" style="background:rgba(255,255,255,.15);border:none;color:#fff"><div class="k" style="color:rgba(255,255,255,.8)">Received</div><div class="v num">${fmt(sumIncome(monthTxns().filter(t=>t.accountId===id)))}</div></div></div></div>`;
   }
 
-  let html=head+`<div class="sectitle"><span>History</span><a onclick="openAccount('${id}')">Edit account</a></div><div class="card">`;
+  let html=head+(['credit','spend'].includes(grp)?acctMonthTable(id):'')+`<div class="sectitle"><span>History</span><a onclick="openAccount('${id}')">Edit account</a></div><div class="card">`;
   if(mine.length===0)html+=`<div class="empty" style="padding:20px">No transactions yet</div>`;
   else mine.forEach(t=>html+=txnRow(t,true));
   html+=`</div><div style="height:14px"></div><button class="btn ghost" onclick="go('acct')">‹ Back to accounts</button><div style="height:24px"></div>`;
@@ -1313,7 +1430,7 @@ function drillCategory(topId){
   let html=`<h2>${c.icon} ${esc(c.name)} <span class="x" onclick="closeSheet()">✕</span></h2>
     <div class="hero" style="background:linear-gradient(135deg,${c.color},${shade(c.color,-30)})"><div class="lbl">${label}</div><div class="bal num">${fmt(total)}</div>
     <div class="sub"><div>Whole ${y}<b class="num">${fmt(yt)}</b></div><div>Monthly avg<b class="num">${fmt(yt/Math.max(1,mv.filter(v=>v).length))}</b></div></div></div>`;
-  html+=`<div class="sectitle">Every month in ${y}</div><div class="card">${svgBar(mv.map((v,i)=>({label:MONTHS[i].slice(0,1),value:v,color:c.color,short:v?kfmt(v):''})),{h:140})}</div>`;
+  html+=`<div class="sectitle">Every month in ${y}</div><div class="card">${svgTrend(mv.map((v,i)=>({label:MONTHS[i],value:v})),{h:170,color:c.color,hi:y===new Date().getFullYear()?new Date().getMonth():-1})}</div>`;
   if(bd){html+=`<div class="sectitle">Subcategories — ${label}</div><div class="card" style="padding:4px 12px">`;
     bd.subs.forEach(su=>html+=`<div class="row-item"><div class="mid"><div class="t">${su.icon||''} ${esc(su.name)}</div></div><div class="amt num">${fmt(su.v)} <span class="mini">${Math.round(su.v/total*100)}%</span></div></div>`);
     html+=`</div>`;}
@@ -1650,7 +1767,7 @@ function renderPay(){
   html+=`<button class="htile add" onclick="openHead(null,'pay')"><span class="hi">＋</span><span class="hn">New item</span></button></div>`;
   if(PAY_MODE==='year'){
     const mv=Array(12).fill(0);LEDGER.forEach(e=>{const d=new Date(e.ts);if(d.getFullYear()===PAY_REF.getFullYear()&&(!PAY_HEAD||e.headId===PAY_HEAD))mv[d.getMonth()]+=e.amount;});
-    html+=`<div class="sectitle">Every month — ${PAY_REF.getFullYear()}</div><div class="card">${svgBar(mv.map((v,i)=>({label:MONTHS[i].slice(0,1),value:v,short:v?kfmt(v):''})),{accent:'var(--brand)'})}</div>`;
+    html+=`<div class="sectitle">Every month — ${PAY_REF.getFullYear()}</div><div class="card">${svgTrend(mv.map((v,i)=>({label:MONTHS[i],value:v})),{hi:PAY_REF.getFullYear()===new Date().getFullYear()?new Date().getMonth():-1})}</div>`;
   }
   html+=`<div class="sectitle"><span>Payments${PAY_HEAD?' — '+esc(lhead(PAY_HEAD)?.name||''):''}</span>${PAY_HEAD?`<a onclick="setPayHead(PAY_HEAD)">Show all</a>`:''}</div>`;
   if(!list.length)html+=`<div class="card"><div class="empty"><span class="em">🧾</span>No payments for ${label}<br><button class="btn sm" style="margin-top:12px" onclick="openLed()">+ Add payment</button></div></div>`;
